@@ -30,10 +30,12 @@ jobs:
         working-directory: .
         run: docker compose build
         env:
+          DOCKER_USER: ${{ secrets.DOCKER_USER }}
           IMAGE_TAG: ${{ github.sha }}
 
       - name: Push images
         working-directory: .
         run: docker compose push
         env:
+          DOCKER_USER: ${{ secrets.DOCKER_USER }}
           IMAGE_TAG: ${{ github.sha }}
