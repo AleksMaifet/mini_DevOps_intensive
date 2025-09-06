@@ -30,7 +30,7 @@ services:
   backend:
     build:
       context: ./backend
-    image: devops-backend
+    image: devops-backend:${IMAGE_TAG}
     container_name: devops-backend
     depends_on:
       db:
@@ -55,7 +55,7 @@ services:
       context: ./frontend
       args:
         VITE_BACKEND_URL: http://localhost:8080/api
-    image: devops-frontend
+    image: devops-frontend:${IMAGE_TAG}
     container_name: devops-frontend
     depends_on:
       backend:
