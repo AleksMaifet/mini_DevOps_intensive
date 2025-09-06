@@ -1,0 +1,24 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [ main ]
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Installing dependencies
+        run: npm install
+
+      - name: Linting
+        run: npm run lint
+
+      - name: Running tests
+        run: npm run test
