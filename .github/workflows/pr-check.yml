@@ -22,3 +22,20 @@ jobs:
 
       - name: Running tests
         run: npm run test
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+      - name: Building a Docker image
+        working-directory: .
+        run: docker compose build
+        env:
+          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+          IMAGE_TAG: ${{ github.sha }}
+
+      - name: Push images
+        working-directory: .
+        run: docker compose push
+        env:
+          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+          IMAGE_TAG: ${{ github.sha }}
