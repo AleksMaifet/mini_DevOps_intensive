@@ -1,8 +1,7 @@
-name: PR Checks
+name: PR Tests
 
 on:
-  pull_request:
-    branches: [ main ]
+  workflow_call:
 
 defaults:
   run:
@@ -11,6 +10,7 @@ defaults:
 jobs:
   test:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v3
 
