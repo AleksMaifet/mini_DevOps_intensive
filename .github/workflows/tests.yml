@@ -8,7 +8,7 @@ defaults:
     working-directory: backend
 
 jobs:
-  test:
+  tests:
     runs-on: ubuntu-latest
 
     steps:
