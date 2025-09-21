@@ -7,10 +7,11 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
+  checks:
     uses: ./.github/workflows/tests.yml
 
   build:
+    needs: checks
     runs-on: ubuntu-latest
 
     steps:
