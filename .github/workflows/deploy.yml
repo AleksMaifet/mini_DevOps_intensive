@@ -1,0 +1,53 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  checks:
+    uses: ./.github/workflows/tests.yml
+
+  build:
+    needs: checks
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+      - name: Building a Docker image
+        working-directory: .
+        run: docker compose build
+        env:
+          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+          IMAGE_TAG: ${{ github.sha }}
+
+      - name: Push images
+        working-directory: .
+        run: docker compose push
+        env:
+          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+          IMAGE_TAG: ${{ github.sha }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            echo ${{ secrets.DOCKER_PASS }} | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+            docker pull ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
+            docker stop devops-frontend || true
+            docker rm devops-frontend || true
+            docker run -d --name devops-frontend -p 3000:80 ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
