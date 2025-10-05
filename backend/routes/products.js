@@ -76,7 +76,7 @@ router.get('/search/:query', async (req, res) => {
         res.json(result.rows);
     } catch (error) {
         console.error('Ошибка при поиске товаров:', error);
-        res.status(500).json({error: 'Ошибка при поиске товаров'});
+        res.status(500).json({error: 'Ошибка при поиске товаров!'});
     }
 });
 
