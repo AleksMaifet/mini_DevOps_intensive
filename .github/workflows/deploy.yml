@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Deploy
 
 on:
   push:
@@ -7,12 +7,48 @@ on:
     branches: [ main ]
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      changed_context: ${{ steps.set-context.outputs.context }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Detect changed services
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+            backend:
+              - 'backend/**'
+
+      - name: Set changed context
+        id: set-context
+        run: |
+          if [[ "${{ steps.filter.outputs.frontend }}" == "true" ]]; then
+            echo "context=frontend" >> $GITHUB_OUTPUT
+          elif [[ "${{ steps.filter.outputs.backend }}" == "true" ]]; then
+            echo "context=backend" >> $GITHUB_OUTPUT
+          else
+            echo "context=none" >> $GITHUB_OUTPUT
+          fi
+
   checks:
-    uses: ./.github/workflows/tests.yml
+    needs: detect-changes
+
+    if: needs.detect-changes.outputs.changed_context != 'none'
+    uses: ./.github/workflows/checks.yaml
+    with:
+      context: ${{ needs.detect-changes.outputs.changed_context }}
 
   build:
-    needs: checks
+    needs:
+      - detect-changes
+      - checks
 
+    if: needs.detect-changes.outputs.changed_context != 'none'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -20,34 +56,44 @@ jobs:
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
 
-      - name: Building a Docker image
-        working-directory: .
-        run: docker compose build
-        env:
-          DOCKER_USER: ${{ secrets.DOCKER_USER }}
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Build and push
+        run: |
+          docker build -t ${{ secrets.DOCKER_USER }}/devops-${{ needs.detect-changes.outputs.changed_context }}:${{ github.sha }} ./${{ needs.detect-changes.outputs.changed_context }}
+          docker push ${{ secrets.DOCKER_USER }}/devops-${{ needs.detect-changes.outputs.changed_context }}:${{ github.sha }}
 
-      - name: Push images
-        working-directory: .
-        run: docker compose push
-        env:
-          DOCKER_USER: ${{ secrets.DOCKER_USER }}
-          IMAGE_TAG: ${{ github.sha }}
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v0.1.6
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            echo ${{ secrets.DOCKER_PASS }} | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
-            docker pull ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
-            docker stop devops-frontend || true
-            docker rm devops-frontend || true
-            docker run -d --name devops-frontend -p 3000:80 ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
+#      - uses: actions/checkout@v3
+#
+#      - name: Log in to Docker Hub
+#        run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+#
+#      - name: Building a Docker image
+#        working-directory: .
+#        run: docker compose build
+#        env:
+#          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+#          IMAGE_TAG: ${{ github.sha }}
+#
+#      - name: Push images
+#        working-directory: .
+#        run: docker compose push
+#        env:
+#          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+#          IMAGE_TAG: ${{ github.sha }}
+#
+#  deploy:
+#    needs: build
+#    runs-on: ubuntu-latest
+#
+#    steps:
+#      - name: Deploy over SSH
+#        uses: appleboy/ssh-action@v0.1.6
+#        with:
+#          host: ${{ secrets.SSH_HOST }}
+#          username: ${{ secrets.SSH_USER }}
+#          key: ${{ secrets.SSH_KEY }}
+#          script: |
+#            echo ${{ secrets.DOCKER_PASS }} | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+#            docker pull ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
+#            docker stop devops-frontend || true
+#            docker rm devops-frontend || true
+#            docker run -d --name devops-frontend -p 3000:80 ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
