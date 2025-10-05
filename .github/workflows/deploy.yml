@@ -13,8 +13,6 @@ jobs:
       changed_context: ${{ steps.set-context.outputs.context }}
     steps:
       - uses: actions/checkout@v3
-        with:
-          fetch-depth: 2
 
       - name: Detect changed services
         id: filter
@@ -25,6 +23,21 @@ jobs:
               - 'frontend/**'
             backend:
               - 'backend/**'
+
+      - name: Debug filter outputs
+        run: |
+          echo "frontend: ${{ steps.filter.outputs.frontend }}"
+          echo "backend:  ${{ steps.filter.outputs.backend }}"
+
+      - name: Show git info
+        run: |
+          git fetch --prune --unshallow || true
+          git --no-pager log --oneline -n 10
+          echo "GITHUB_EVENT_NAME = $GITHUB_EVENT_NAME"
+          echo "GITHUB_REF = $GITHUB_REF"
+          echo "GITHUB_SHA = $GITHUB_SHA"
+          echo "GITHUB_BASE_REF = $GITHUB_BASE_REF"
+          echo "GITHUB_HEAD_REF = $GITHUB_HEAD_REF"
 
       - name: Set changed context
         id: set-context
