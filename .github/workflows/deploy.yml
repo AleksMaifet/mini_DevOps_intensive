@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  IMAGE_PREFIX: ${{ secrets.DOCKER_USER }}
+  FRONT_IMAGE: devops-frontend
+  BACK_IMAGE: devops-backend
+  TAG: ${{ github.sha }}
+  DOCKER_NETWORK: apps
+
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
@@ -42,7 +49,6 @@ jobs:
 
   build-frontend:
     needs: checks-frontend
-    if: needs.detect-changes.outputs.frontend_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -52,12 +58,11 @@ jobs:
 
       - name: Build frontend image
         run: |
-          docker build -t ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }} ./frontend
-          docker push ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
+          docker build -t ${{ env.IMAGE_PREFIX }}/${{ env.FRONT_IMAGE }}:${{ env.TAG }} ./frontend
+          docker push ${{ env.IMAGE_PREFIX }}/${{ env.FRONT_IMAGE }}:${{ env.TAG }}
 
   build-backend:
     needs: checks-backend
-    if: needs.detect-changes.outputs.backend_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -67,42 +72,22 @@ jobs:
 
       - name: Build backend image
         run: |
-          docker build -t ${{ secrets.DOCKER_USER }}/devops-backend:${{ github.sha }} ./backend
-          docker push ${{ secrets.DOCKER_USER }}/devops-backend:${{ github.sha }}
+          docker build -t ${{ env.IMAGE_PREFIX }}/${{ env.BACK_IMAGE }}:${{ env.TAG }} ./backend
+          docker push ${{ env.IMAGE_PREFIX }}/${{ env.BACK_IMAGE }}:${{ env.TAG }}
 
-#      - uses: actions/checkout@v3
-#
-#      - name: Log in to Docker Hub
-#        run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
-#
-#      - name: Building a Docker image
-#        working-directory: .
-#        run: docker compose build
-#        env:
-#          DOCKER_USER: ${{ secrets.DOCKER_USER }}
-#          IMAGE_TAG: ${{ github.sha }}
-#
-#      - name: Push images
-#        working-directory: .
-#        run: docker compose push
-#        env:
-#          DOCKER_USER: ${{ secrets.DOCKER_USER }}
-#          IMAGE_TAG: ${{ github.sha }}
-#
-#  deploy:
-#    needs: build
-#    runs-on: ubuntu-latest
-#
-#    steps:
-#      - name: Deploy over SSH
-#        uses: appleboy/ssh-action@v0.1.6
-#        with:
-#          host: ${{ secrets.SSH_HOST }}
-#          username: ${{ secrets.SSH_USER }}
-#          key: ${{ secrets.SSH_KEY }}
-#          script: |
-#            echo ${{ secrets.DOCKER_PASS }} | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
-#            docker pull ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
-#            docker stop devops-frontend || true
-#            docker rm devops-frontend || true
-#            docker run -d --name devops-frontend -p 3000:80 ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
+  deploy:
+    needs: checks-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            echo ${{ secrets.DOCKER_PASS }} | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+            docker pull ${{ env.IMAGE_PREFIX }}/${{ env.FRONT_IMAGE }}:${{ env.TAG }}
+            docker stop ${{ env.FRONT_IMAGE }} || true
+            docker rm ${{ env.FRONT_IMAGE }} || true
+            docker run -d --name ${{ env.FRONT_IMAGE }} --network ${{ env.DOCKER_NETWORK }} ${{ env.IMAGE_PREFIX }}/${{ env.FRONT_IMAGE }}:${{ env.TAG }}
