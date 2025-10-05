@@ -75,8 +75,8 @@ jobs:
           docker build -t ${{ env.IMAGE_PREFIX }}/${{ env.BACK_IMAGE }}:${{ env.TAG }} ./backend
           docker push ${{ env.IMAGE_PREFIX }}/${{ env.BACK_IMAGE }}:${{ env.TAG }}
 
-  deploy:
-    needs: checks-frontend
+  deploy-frontend:
+    needs: build-frontend
     runs-on: ubuntu-latest
     steps:
       - name: Deploy over SSH
@@ -91,3 +91,20 @@ jobs:
             docker stop ${{ env.FRONT_IMAGE }} || true
             docker rm ${{ env.FRONT_IMAGE }} || true
             docker run -d --name ${{ env.FRONT_IMAGE }} --network ${{ env.DOCKER_NETWORK }} ${{ env.IMAGE_PREFIX }}/${{ env.FRONT_IMAGE }}:${{ env.TAG }}
+
+  deploy-backend:
+    needs: build-backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            echo ${{ secrets.DOCKER_PASS }} | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+            docker pull ${{ env.IMAGE_PREFIX }}/${{ env.BACK_IMAGE }}:${{ env.TAG }}
+            docker stop ${{ env.BACK_IMAGE }} || true
+            docker rm ${{ env.BACK_IMAGE }} || true
+            docker run -d --name ${{ env.BACK_IMAGE }} --network ${{ env.DOCKER_NETWORK }} ${{ env.IMAGE_PREFIX }}/${{ env.BACK_IMAGE }}:${{ env.TAG }}
