@@ -13,10 +13,8 @@ jobs:
       frontend_changed: ${{ steps.filter.outputs.frontend }}
       backend_changed: ${{ steps.filter.outputs.backend }}
     steps:
-      - name: Checkout repository (full fetch)
+      - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Detect changed services
         id: filter
@@ -28,21 +26,26 @@ jobs:
             backend:
               - 'backend/**'
 
-  checks:
+  checks-frontend:
     needs: detect-changes
-    if: needs.detect-changes.outputs.frontend_changed != 'true' || needs.detect-changes.outputs.backend_changed == 'true'
+    if: needs.detect-changes.outputs.frontend_changed == 'true'
     uses: ./.github/workflows/checks.yml
     with:
-      context: ${{ fromJson(format('["{0}","{1}"]', needs.detect-changes.outputs.frontend_changed == 'true' && 'frontend', needs.detect-changes.outputs.backend_changed == 'true' && 'backend')) }}
+      context: frontend
+
+  checks-backend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend_changed == 'true'
+    uses: ./.github/workflows/checks.yml
+    with:
+      context: backend
 
   build-frontend:
-    needs: [ checks, detect-changes ]
+    needs: checks-frontend
     if: needs.detect-changes.outputs.frontend_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
@@ -53,13 +56,11 @@ jobs:
           docker push ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
 
   build-backend:
-    needs: [ checks, detect-changes ]
+    needs: checks-backend
     if: needs.detect-changes.outputs.backend_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
