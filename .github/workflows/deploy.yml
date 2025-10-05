@@ -24,6 +24,11 @@ jobs:
             backend:
               - 'backend/**'
 
+      - name: Debug paths-filter outputs
+        run: |
+          echo "frontend=${{ steps.filter.outputs.frontend }}"
+          echo "backend=${{ steps.filter.outputs.backend }}"
+
       - name: Set changed context
         id: set-context
         run: |
