@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Deploy
 
 on:
   push:
@@ -7,47 +7,101 @@ on:
     branches: [ main ]
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend_changed: ${{ steps.filter.outputs.frontend }}
+      backend_changed: ${{ steps.filter.outputs.backend }}
+    steps:
+      - name: Checkout repository (full fetch)
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed services
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+            backend:
+              - 'backend/**'
+
   checks:
-    uses: ./.github/workflows/tests.yml
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend_changed != 'true' || needs.detect-changes.outputs.backend_changed == 'true'
+    uses: ./.github/workflows/checks.yml
+    with:
+      context: ${{ fromJson(format('["{0}","{1}"]', needs.detect-changes.outputs.frontend_changed == 'true' && 'frontend', needs.detect-changes.outputs.backend_changed == 'true' && 'backend')) }}
 
-  build:
-    needs: checks
-
+  build-frontend:
+    needs: [ checks, detect-changes ]
+    if: needs.detect-changes.outputs.frontend_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
 
-      - name: Building a Docker image
-        working-directory: .
-        run: docker compose build
-        env:
-          DOCKER_USER: ${{ secrets.DOCKER_USER }}
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Build frontend image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }} ./frontend
+          docker push ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
 
-      - name: Push images
-        working-directory: .
-        run: docker compose push
-        env:
-          DOCKER_USER: ${{ secrets.DOCKER_USER }}
-          IMAGE_TAG: ${{ github.sha }}
-
-  deploy:
-    needs: build
+  build-backend:
+    needs: [ checks, detect-changes ]
+    if: needs.detect-changes.outputs.backend_changed == 'true'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v0.1.6
+      - uses: actions/checkout@v3
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            echo ${{ secrets.DOCKER_PASS }} | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
-            docker pull ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
-            docker stop devops-frontend || true
-            docker rm devops-frontend || true
-            docker run -d --name devops-frontend -p 3000:80 ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+      - name: Build backend image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USER }}/devops-backend:${{ github.sha }} ./backend
+          docker push ${{ secrets.DOCKER_USER }}/devops-backend:${{ github.sha }}
+
+#      - uses: actions/checkout@v3
+#
+#      - name: Log in to Docker Hub
+#        run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+#
+#      - name: Building a Docker image
+#        working-directory: .
+#        run: docker compose build
+#        env:
+#          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+#          IMAGE_TAG: ${{ github.sha }}
+#
+#      - name: Push images
+#        working-directory: .
+#        run: docker compose push
+#        env:
+#          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+#          IMAGE_TAG: ${{ github.sha }}
+#
+#  deploy:
+#    needs: build
+#    runs-on: ubuntu-latest
+#
+#    steps:
+#      - name: Deploy over SSH
+#        uses: appleboy/ssh-action@v0.1.6
+#        with:
+#          host: ${{ secrets.SSH_HOST }}
+#          username: ${{ secrets.SSH_USER }}
+#          key: ${{ secrets.SSH_KEY }}
+#          script: |
+#            echo ${{ secrets.DOCKER_PASS }} | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+#            docker pull ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
+#            docker stop devops-frontend || true
+#            docker rm devops-frontend || true
+#            docker run -d --name devops-frontend -p 3000:80 ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
