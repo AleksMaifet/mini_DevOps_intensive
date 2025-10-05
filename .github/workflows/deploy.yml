@@ -20,16 +20,9 @@ jobs:
         with:
           filters: |
             frontend:
-              - 'frontend/**'
+              - './frontend/**'
             backend:
-              - 'backend/**'
-
-      - name: Debug paths-filter outputs
-        run: |
-          echo "filter.frontend=${{ steps.filter.outputs.frontend }}"
-          echo "filter.backend=${{ steps.filter.outputs.backend }}"
-          git status --porcelain
-          git --no-pager diff --name-only HEAD^..HEAD || true
+              - './backend/**'
 
       - name: Set changed context
         id: set-context
@@ -50,23 +43,31 @@ jobs:
     with:
       context: ${{ needs.detect-changes.outputs.changed_context }}
 
-  build:
-    needs:
-      - detect-changes
-      - checks
-
-    if: needs.detect-changes.outputs.changed_context != 'none'
+  build-backend:
+    needs: [ detect-changes, checks ]
+    if: contains(needs.detect-changes.outputs.changed_context, 'backend')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
-
-      - name: Build and push
+      - name: Build and push backend
         run: |
-          docker build -t ${{ secrets.DOCKER_USER }}/devops-${{ needs.detect-changes.outputs.changed_context }}:${{ github.sha }} ./${{ needs.detect-changes.outputs.changed_context }}
-          docker push ${{ secrets.DOCKER_USER }}/devops-${{ needs.detect-changes.outputs.changed_context }}:${{ github.sha }}
+          docker build -t ${{ secrets.DOCKER_USER }}/devops-backend:${{ github.sha }} ./backend
+          docker push ${{ secrets.DOCKER_USER }}/devops-backend:${{ github.sha }}
+
+  build-frontend:
+    needs: [ detect-changes, checks ]
+    if: contains(needs.detect-changes.outputs.changed_context, 'frontend')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u ${{ secrets.DOCKER_USER }} --password-stdin
+      - name: Build and push frontend
+        run: |
+          docker build -t ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }} ./frontend
+          docker push ${{ secrets.DOCKER_USER }}/devops-frontend:${{ github.sha }}
 
 #      - uses: actions/checkout@v3
 #
