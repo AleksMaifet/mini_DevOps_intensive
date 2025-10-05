@@ -26,8 +26,10 @@ jobs:
 
       - name: Debug paths-filter outputs
         run: |
-          echo "frontend=${{ steps.filter.outputs.frontend }}"
-          echo "backend=${{ steps.filter.outputs.backend }}"
+          echo "filter.frontend=${{ steps.filter.outputs.frontend }}"
+          echo "filter.backend=${{ steps.filter.outputs.backend }}"
+          git status --porcelain
+          git --no-pager diff --name-only HEAD^..HEAD || true
 
       - name: Set changed context
         id: set-context
